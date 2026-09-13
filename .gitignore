@@ -12,3 +12,11 @@ output/
 *.log
 
 .DS_Store
+
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+output.png
+output_8x.png

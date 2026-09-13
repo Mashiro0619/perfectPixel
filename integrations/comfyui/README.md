@@ -1,128 +1,74 @@
-# PerfectPixel ComfyUI Node
+# Perfect Pixel ComfyUI node
 
-This document describes the usage of the **Perfect Pixel (Grid Restore)** node in ComfyUI.
+This repository provides **Perfect Pixel (Grid Restore)**, an IMAGE-to-IMAGE node in the `image/postprocessing` category.
 
-> For Chinese documentation, see: 
-> https://github.com/TobyKSKGD/perfectPixel-ComfyUI#
+![Example](../../images/comfyui.png)
 
-## Node Parameters
+## Install from this repository
 
-![example](../../images/comfyui.png)
+1. Download or clone this repository.
+2. Copy **`integrations/comfyui/PerfectPixelComfy`** into **`ComfyUI/custom_nodes/PerfectPixelComfy`**. Copy the folder, not only its Python files.
+3. Using **the same Python interpreter that runs ComfyUI**, install the library:
 
-The **Perfect Pixel (Grid Restore)** node provides the following configurable parameters:
+~~~bash
+# Recommended: OpenCV acceleration
+python -m pip install "perfect-pixel[opencv]"
 
-- **sampling**
-  Sampling method used when restoring pixel grids.
+# NumPy-only alternative
+python -m pip install perfect-pixel
+~~~
 
-- **export_scale**
-  Scaling factor applied to the output image.
+To use the code from this checkout before a new release is published, install the repository root rather than the PyPI version:
 
-- **backend**
-  Backend implementation to use:
-  - **Auto**: Automatically selects the available backend
-  - **OpenCV Backend**: Uses OpenCV for better performance
-  - **Lightweight Backend**: NumPy-only implementation without OpenCV
+~~~bash
+python -m pip install "/path/to/perfectPixel[opencv]"
+~~~
 
-## Getting Started
+4. Restart ComfyUI and search for **Perfect Pixel (Grid Restore)**.
 
-### One-Click Installation
+PyTorch is provided by ComfyUI; do not replace its PyTorch installation to install this node. The standalone library's debug/Matplotlib extra is not needed for the node.
 
-If Git is already installed, run the following command inside `ComfyUI/custom_nodes` and then restart ComfyUI:
+## Alternative: copy the backends instead of installing the library
 
-```bash
-git clone https://github.com/TobyKSKGD/perfectPixel-ComfyUI.git
+If you cannot install the library package, copy these two files from this checkout into the **same copied PerfectPixelComfy folder**:
 
-# Recommended: Fast version with OpenCV support
-pip install perfect-pixel[opencv]
+- `src/perfect_pixel/perfect_pixel.py`
+- `src/perfect_pixel/perfect_pixel_noCV2.py`
 
-# Or Numpy version: Lightweight (NumPy only)
-# pip install perfect-pixel
-```
+Install NumPy in ComfyUI's environment, and optionally opencv-python. The resulting directory is:
 
-If you are not sure how to install Python packages in ComfyUI’s Python environment on Windows, 
-please refer to **[Installing Python Dependencies in the ComfyUI Environment (Windows)](#Installing Python Dependencies in the ComfyUI Environment (Windows))** below.
+~~~text
+ComfyUI/custom_nodes/PerfectPixelComfy/
+    __init__.py
+    nodes_perfect_pixel.py
+    perfect_pixel.py
+    perfect_pixel_noCV2.py
+~~~
 
-### Manual Installation
+The loader first uses copied sibling backends, then falls back to the installed `perfect_pixel` package when no sibling backend exists. Copied backends must be updated together with the node; they take precedence over a pip-installed version.
 
-Download this repository, then copy the entire `./integrations/comfyui/perfectPixel-ComfyUI` folder into `ComfyUI/custom_nodes`.
+## Parameters and behavior
 
-In addition, copy the following two core files from the original Perfect Pixel source into the same `PerfectPixelComfy` folder:
+- **sampling**: Majority Cluster or Center Sample.
+- **export_scale**: integer nearest-neighbor enlargement from 1 to 16, default 4.
+- **backend**:
+  - **Auto**: use OpenCV when cv2 is installed, otherwise use the NumPy backend. Errors inside an installed backend are not silently hidden.
+  - **OpenCV Backend**: explicitly require cv2.
+  - **Lightweight Backend**: explicitly select the NumPy implementation, even if cv2 is installed.
 
-- `./src/perfect_pixel/perfect_pixel.py`
-- `./src/perfect_pixel/perfect_pixel_noCV2.py`
+Input is a finite RGB tensor shaped `[B,H,W,3]` in the usual ComfyUI 0..1 range. Output uses the same tensor convention. On detection failure the original image is retained, then enlarged by export_scale. Use scale 1 when checking uncertain inputs to avoid unnecessarily large fallback images.
 
-These files are required by the node at runtime.
+Every output in a batch must have the same detected width and height. Equal **input** dimensions do not guarantee equal detected grids. If a batch contains different grid sizes (or a mix of successful and failed detections), process the images individually; the node reports a clear error rather than silently resizing or distorting them.
 
-Restart ComfyUI after copying.
+## Windows portable ComfyUI
 
-After restarting, search for **Perfect Pixel (Grid Restore)** in the node search panel on the left to find the node.
-The node is located at: `Image → Post Processing → Perfect Pixel (Grid Restore)`
+Installing packages into system Python does not install them into ComfyUI. Find the **Python executable** in ComfyUI's startup log, then use that exact executable. For example, in PowerShell:
 
-## Dependencies
+~~~powershell
+& "G:\ComfyUI\ComfyUI_windows_portable\python_embeded\python.exe" -m pip install "perfect-pixel[opencv]"
 
-This node requires the following dependencies:
+# For this local checkout instead of a published release:
+& "G:\ComfyUI\ComfyUI_windows_portable\python_embeded\python.exe" -m pip install "D:\Project\perfectPixel[opencv]"
+~~~
 
-- `numpy`
-- `opencv-python` (optional, required for OpenCV backend)
-
-Install dependencies with:
-
-```bash
-pip install numpy
-pip install opencv-python
-```
-
-## Installing Python Dependencies in the ComfyUI Environment (Windows)
-
-ComfyUI uses its **own embedded Python environment**, which may be different from your system Python or Conda environment.
- Installing packages with `pip` in your system terminal may **not** make them available to ComfyUI.
-
-To install Python dependencies correctly, you must use **the Python executable that ComfyUI is running with**.
-
-### Step 1: Find the Python executable used by ComfyUI
-
-On Windows, start ComfyUI by running one of the provided `.bat` files (for example `run_cpu.bat`, `run_nvidia_gpu.bat`, etc.).
-
-When ComfyUI starts, look at the startup log in the terminal. You should see lines similar to:
-
-```bash
-** Python version: 3.12.10
-** Python executable: G:\ComfyUI\ComfyUI_windows_portable\python_embeded\python.exe
-```
-
-The path shown after **Python executable** is the Python environment used by ComfyUI.
-
-### Step 2: Install dependencies using ComfyUI’s Python
-
-Run the following commands in a terminal **using the Python executable shown in your ComfyUI startup log**:
-
-```bash
-[path_to_your_ComfyUI_python]\python.exe -m pip install -U pip
-
-# Recommended: Fast version with OpenCV support
-[path_to_your_ComfyUI_python]\python.exe -m pip install "perfect-pixel[opencv]"
-
-# Or Numpy version: Lightweight (NumPy only)
-# [path_to_your_ComfyUI_python]\python.exe -m pip install perfect-pixel
-
-# Dependencies
-[path_to_your_ComfyUI_python]\python.exe -m pip install numpy
-[path_to_your_ComfyUI_python]\python.exe -m pip install opencv-python
-```
-
-**Example (Windows portable build):**
-
-```bash
-G:\ComfyUI\ComfyUI_windows_portable\python_embeded\python.exe -m pip install -U pip
-G:\ComfyUI\ComfyUI_windows_portable\python_embeded\python.exe -m pip install "perfect-pixel[opencv]"
-```
-
-> ⚠️ **Important:**
->  Replace `[path_to_your_ComfyUI_python]` with the **actual Python executable path** shown in your ComfyUI startup log:
->
-> ```bash
-> ** Python executable: ...\python.exe
-> ```
-
-**Tip:** Do not use `pip install` from your system Python or Conda environment.
- Always install packages using the Python executable that ComfyUI is running with.
+Replace both paths with your actual locations. Restart ComfyUI after installing or updating the package.

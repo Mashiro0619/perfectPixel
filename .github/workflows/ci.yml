@@ -1,0 +1,117 @@
+name: Tests and packages
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHONDONTWRITEBYTECODE: "1"
+  MPLBACKEND: Agg
+  OMP_NUM_THREADS: "1"
+
+jobs:
+  tests:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {os: ubuntu-latest, python: "3.8", extras: test, backend: numpy}
+          - {os: ubuntu-latest, python: "3.10", extras: "test,opencv,debug", backend: opencv}
+          - {os: ubuntu-latest, python: "3.13", extras: test, backend: numpy}
+          - {os: windows-latest, python: "3.10", extras: "test,debug", backend: numpy}
+          - {os: windows-latest, python: "3.12", extras: "test,opencv,debug", backend: opencv}
+          - {os: macos-latest, python: "3.12", extras: "test,opencv,debug", backend: opencv}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: python -m pip install -e ".[${{ matrix.extras }}]"
+      - name: Verify NumPy-only installation
+        if: matrix.backend == 'numpy'
+        run: python -c "import importlib.util, perfect_pixel; assert importlib.util.find_spec('cv2') is None; assert perfect_pixel.get_perfect_pixel.__module__.endswith('perfect_pixel_noCV2')"
+      - name: Verify OpenCV selection
+        if: matrix.backend == 'opencv'
+        run: python -c "import cv2, perfect_pixel; assert perfect_pixel.get_perfect_pixel.__module__ == 'perfect_pixel.perfect_pixel'"
+      - run: python -m pytest -q
+
+  minimum-numpy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.8"
+      # Newer Pillow annotations require numpy.typing.NDArray (NumPy >= 1.21).
+      - run: python -m pip install "numpy==1.20.0" "Pillow==8.4.0" -e ".[test]"
+      - run: python -c "import numpy; assert numpy.__version__ == '1.20.0'"
+      - run: python -m pytest -q
+
+  comfyui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - run: python -m pip install torch --index-url https://download.pytorch.org/whl/cpu
+      - run: python -m pip install -e ".[test,opencv]"
+      - run: python -m pytest tests/test_comfyui.py -q
+      - name: Exercise the actual no-OpenCV environment
+        run: |
+          python -m pip uninstall -y opencv-python
+          python -m pytest tests/test_comfyui.py -q
+
+  packages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install build twine
+      - run: python -m build
+      - run: python -m twine check --strict dist/*
+      - name: Smoke test a clean wheel installation
+        run: |
+          python -m venv wheel-check
+          wheel-check/bin/python -m pip install dist/*.whl
+          wheel-check/bin/python -c "import importlib.metadata, numpy as np, perfect_pixel; assert perfect_pixel.__version__ == importlib.metadata.version('perfect-pixel'); assert perfect_pixel.get_perfect_pixel.__module__.endswith('perfect_pixel_noCV2'); w,h,out = perfect_pixel.get_perfect_pixel(np.zeros((100,100,3),np.uint8),grid_size=(5,5)); assert (w,h,out.shape) == (5,5,(5,5,3))"
+      - name: Test an unpacked sdist outside the checkout
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          import subprocess
+          import tarfile
+          import venv
+
+          archive_path = next(Path("dist").glob("*.tar.gz"))
+          destination = Path(os.environ["RUNNER_TEMP"]) / "perfect-pixel-sdist"
+          destination.mkdir(parents=True, exist_ok=True)
+          with tarfile.open(archive_path) as archive:
+              archive.extractall(destination, filter="data")
+          source = destination / archive_path.name.removesuffix(".tar.gz")
+          environment = destination / "venv"
+          venv.EnvBuilder(with_pip=True).create(environment)
+          python = environment / "bin" / "python"
+          env = os.environ.copy()
+          env.pop("PYTHONPATH", None)
+          env.pop("PYTHONHOME", None)
+          subprocess.run([python, "-m", "pip", "install", f"{source}[test,opencv,debug]"],
+                         cwd=source, env=env, check=True)
+          subprocess.run([python, "-m", "pytest", "-q"], cwd=source, env=env, check=True)
+          PY

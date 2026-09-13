@@ -20,7 +20,7 @@ This tool automatically detects the optimal grid and delivers perfectly aligned,
 
 ## Installation
 
-**Perfect Pixel** provides two implementations of the same core algorithm. The Lighweight Backend is designed in case you can't or don't want to use cv2. You can choose the one that best fits your environment:
+**Perfect Pixel** provides two implementations of the same core algorithm. The Lightweight Backend is designed in case you can't or don't want to use cv2. You can choose the one that best fits your environment. Both backends share the API, but floating-point and clustering results are not guaranteed to be identical:
 
 | Feature | OpenCV Backend ([`perfect_pixel.py`](./src/perfect_pixel/perfect_pixel.py)) | Lightweight Backend ([`perfect_pixel_no_cv2.py`](./src/perfect_pixel/perfect_pixel_noCV2.py)) |
 | :--- | :--- | :--- |
@@ -30,17 +30,20 @@ You can install Perfect Pixel via `pip`. It is recommended to install the OpenCV
 
 ```bash
 # Recommended: Fast version with OpenCV support
-pip install perfect-pixel[opencv]
+pip install "perfect-pixel[opencv]"
 
 # Numpy version: Lightweight (NumPy only)
 pip install perfect-pixel
+
+# Optional plots used by debug=True and example.py --show/--debug
+pip install "perfect-pixel[opencv,debug]"
 ```
 
 ## ComfyUI
 
 A ComfyUI custom node is available for integrating Perfect Pixel into ComfyUI workflows.
 
-- No changes to the core Perfect Pixel algorithm
+- Uses the same Perfect Pixel API and RGB input convention
 - Provides a ComfyUI-friendly interface for pixel art refinement
 
 - [`Learn how to use Perfect Pixel as a ComfyUI node`](integrations/comfyui/README.md)
@@ -80,6 +83,9 @@ w, h, out = get_perfect_pixel(rgb)
 *Also see [example.py](./example.py).*
 ```bash
 python example.py
+
+# Optional interactive plots; requires the debug extra above
+python example.py --show --debug
 ```
 
 The grid size is automatically detected, and the image is refined.
@@ -91,20 +97,39 @@ Try integrate it into your own projects!
 ## API Reference
 | Args | Description | 
 | :--- | :--- |
-| **image** | `RGB Image (H * W * 3)` |
+| **image** | `Non-empty, finite, real numeric NumPy RGB array shaped (H, W, 3), normally uint8 in 0..255 or floats in 0..1 / 0..255.` |
 | **sample_method** | `"center", "median" or "majority"` |
-| **grid_size** | `Manually set grid size (grid_w, grid_h) to override auto-detection` |
-| **min_size** | `Minimum pixel size to consider valid` |
-| **peak_width** | `Minimum peak width for peak detection.` |
-| **refine_intensity** | `Intensity for grid line refinement. Recommended range is [0, 0.5]. Given original estimated grid line at x, the refinement will search in [x * (1 - refine_intensity), x * (1 + refine_intensity)].` |
-| **fix_square** | `Whether to enforce output to be square when detected image is almost square.` |
-| **debug** | `Whether to show debug plots.` |
+| **grid_size** | `Positive integer cell counts (grid_w, grid_h), no greater than input width/height. Preserves exactly this output size and overrides min_size and fix_square.` |
+| **min_size** | `Minimum average source-pixel size of an automatic grid; enforced after detection and refinement. Must be finite and positive.` |
+| **peak_width** | `Positive integer minimum peak width for FFT peak detection.` |
+| **refine_intensity** | `Finite number in [0, 0.5]. Each grid line searches within +/- cell_size * refine_intensity. Zero disables refinement.` |
+| **fix_square** | `Whether to adjust an almost-square automatic result to a square. Ignored for a manual grid_size.` |
+| **debug** | `Whether to show debug plots. Requires pip install "perfect-pixel[debug]".` |
 
 | Returns | Description |
 | :--- | :--- |
 | **refined_w** | `Width of the refined image` |
 | **refined_h** | `Height of the refined image` |
-| **scaled_image** | `Refined Image(W * H * 3)` |
+| **scaled_image** | `Refined NumPy image shaped (refined_h, refined_w, 3)` |
+
+Invalid image shapes or parameter values raise `ValueError`. If automatic detection cannot find a valid grid, the function returns `(None, None, original_image)`; callers should check both dimensions before treating the result as refined. Normal processing does not print status messages; enable Python debug logging to inspect detection decisions.
+
+A manual grid is useful when automatic detection is uncertain:
+
+~~~python
+w, h, out = get_perfect_pixel(rgb, grid_size=(16, 16))
+assert out.shape == (16, 16, 3)
+~~~
+
+## Development and tests
+
+~~~bash
+python -m pip install -e ".[test,opencv,debug]"
+python -m pytest
+python -m build
+~~~
+
+The tests cover NumPy-only and OpenCV processing, all samplers, regression cases, and packaging metadata. Source distributions include the test fixtures, sample images, example, and ComfyUI files. Packaging tests build an sdist offline; CI also installs and runs the unpacked source tree outside the Git checkout. ComfyUI tests run when PyTorch is available (it is supplied by a ComfyUI installation); CI also runs a separate CPU PyTorch integration job. The CI matrix includes Linux, Windows, macOS, Python 3.8 compatibility, and the minimum NumPy dependency.
 
 ## Algorithm
 

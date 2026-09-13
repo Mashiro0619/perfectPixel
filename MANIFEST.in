@@ -1,0 +1,6 @@
+include readme.md
+include example.py
+recursive-include tests *.py
+recursive-include images *.png *.jpg *.jpeg
+recursive-include integrations/comfyui *.py *.md
+global-exclude __pycache__ *.py[cod]
