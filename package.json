@@ -1,0 +1,72 @@
+{
+  "name": "@mashirotech/perfect-pixel",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Fast, local-first TypeScript browser & Node engine for snapping blurry AI-generated pixel art to crisp pixel grids.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Mashiro0619/perfectPixel.git"
+  },
+  "homepage": "https://www.mashiro.tech/tools/pixel/",
+  "keywords": [
+    "pixel-art",
+    "perfect-pixel",
+    "fft",
+    "grid-detection",
+    "ai-art",
+    "canvas",
+    "web-worker",
+    "typescript"
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "files": [
+    "dist",
+    "src",
+    "LICENSE",
+    "NOTICE.md",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./types": {
+      "types": "./dist/types.d.ts",
+      "default": "./dist/types.js"
+    },
+    "./png": {
+      "types": "./dist/png.d.ts",
+      "default": "./dist/png.js"
+    },
+    "./image": {
+      "types": "./dist/image.d.ts",
+      "default": "./dist/image.js"
+    },
+    "./sample": {
+      "types": "./dist/sample.d.ts",
+      "default": "./dist/sample.js"
+    },
+    "./worker": {
+      "types": "./dist/worker.d.ts",
+      "default": "./dist/worker.js"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "node --test tests/*.test.mjs",
+    "check": "npm run typecheck && npm run build && npm test"
+  },
+  "dependencies": {
+    "fft.js": "4.0.4"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "sharp": "^0.35.5",
+    "typescript": "^5.8.3"
+  }
+}
